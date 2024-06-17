@@ -66,6 +66,7 @@ LOCALES_DEFAULT="YES"
 DEV_UPDATES_DEFAULT="NO"
 AHBOT_DEFAULT="NO"
 PLAYERBOTS_DB_DEFAULT="NO"
+SOLOCRAFT_DB_DEFAULT="NO"
 FORCE_WAIT_DEFAULT="YES"
 
 # variables assigned and read from $CONFIG_FILE
@@ -85,6 +86,7 @@ MYSQL_DUMP_PATH="${MYSQL_DUMP_PATH_DEFAULT}"
 LOCALES="${LOCALES_DEFAULT}"
 DEV_UPDATES="${DEV_UPDATES_DEFAULT}"
 PLAYERBOTS_DB="${PLAYERBOTS_DB_DEFAULT}"
+SOLOCRAFT_DB="${SOLOCRAFT_DB_DEFAULT}"
 AHBOT="${AHBOT_DEFAULT}"
 FORCE_WAIT="${FORCE_WAIT_DEFAULT}"
 
@@ -304,6 +306,10 @@ function save_settings()
   allsettings+=("## Define if the 'src/modules/PlayerBots/sql' directory for processing development SQL files needs to be used")
   allsettings+=("##   Set the variable to \"YES\" to use the playerbots directory")
   allsettings+=("PLAYERBOTS_DB=\"$PLAYERBOTS_DB\"")
+  allsettings+=("")
+  allsettings+=("## Define if the 'src/modules/SoloCraft/sql' directory for procesing development SQL files needs to be used")
+  allsettings+=("##	  Set the variable t \"YES\" to use the SoloCraft directory")
+  allsettings+=("SOLOCRAFT_DB=\"$SOLOCRAFT_DB\"")
   allsettings+=("")
   allsettings+=("# Enjoy using the tool")
 
@@ -647,6 +653,7 @@ function show_mysql_settings()
   echo -e "DEV_UPDATES.............: $DEV_UPDATES"
   echo -e "AHBOT...................: $AHBOT"
   echo -e "PLAYERBOTS_DB...........: $PLAYERBOTS_DB"
+  echo -e "SOLOCRAFT_DB............: $SOLOCRAFT_DB"
 }
 
 # arg1 = arg2 (if arg2 is empty then arg1 = arg3, if arg3 is empty do nothing)
@@ -702,6 +709,7 @@ function change_mysql_settings()
     read -e -p    "DEV_UPDATES(default:NO).........: " -i "$DEV_UPDATES" DEV_UPDATES
     read -e -p    "AHBOT(default:NO)...............: " -i "$AHBOT" AHBOT
     read -e -p    "PLAYERBOTS_DB(default:NO).......: " -i "$PLAYERBOTS_DB" PLAYERBOTS_DB
+	read -e -p    "SOLOCRAFT_DB(default:NO)........: " -i "$SOLOCRAFT_DB" SOLOCRAFT_DB
   else
     read -e -p    "Enter MySQL host...............current($MYSQL_HOST).: " mhost
     read -e -p    "Enter MySQL port...............current($MYSQL_PORT).: " mport
@@ -718,6 +726,7 @@ function change_mysql_settings()
     read -e -p    "DEV_UPDATES(default:NO)........current($DEV_UPDATES).: " dev
     read -e -p    "AHBOT(default:NO)..............current($AHBOT).: " ahb
     read -e -p    "PLAYERBOTS_DB(default:NO)......current($PLAYERBOTS_DB).: " bot
+	read -e -p    "SOLOCRAFT_DB(default:NO).......current($SOLOCRAFT_DB).: " solo
 
     assign_new_value 'MYSQL_HOST' "${mhost}"
     assign_new_value 'MYSQL_PORT' "${mport}"
@@ -730,6 +739,7 @@ function change_mysql_settings()
     assign_new_value 'LOCALES' "${loc}"
     assign_new_value 'DEV_UPDATES' "${dev}"
     assign_new_value 'PLAYERBOTS_DB' "${bot}"
+	assign_new_value 'SOLOCRAFT_DB' "${solo}"
     assign_new_value 'AHBOT' "${ahb}"
   fi
 
@@ -1519,6 +1529,29 @@ function apply_playerbots_db
   true
 }
 
+# Apply playerbot sql files
+function apply_solocraft_db()
+{
+  if [ "$SOLOCRAFT_DB" != "YES" ]; then
+    true
+    return
+  fi
+  
+  echo "> Trying to apply SoloCraft sql mods for characters db..."
+  for UPDATEFILE in ${CORE_PATH}/src/modules/SoloCraft/sql/characters/*.sql; do
+    if [ -e "$UPDATEFILE" ]; then
+      local fName=$(basename "$UPDATEFILE")
+      if ! execute_sql_file "$CHAR_DB_NAME" "$UPDATEFILE" "  - Applying $fName"; then
+        false
+        return
+      fi
+    fi
+  done
+
+  echo
+  true
+}
+
 # Content db installation
 function apply_content_db()
 {
@@ -1923,6 +1956,29 @@ function create_and_fill_playerbots_db()
   true
 }
 
+function create_and_fill_solocraft_db()
+{
+  if [ "$SOLOCRAFT_DB" != "YES" ]; then
+    true
+    return
+  fi
+
+  if [[ "$1" = true ]]; then
+    clear
+    if ! are_you_sure "SoloCraft"; then
+      return
+    fi
+  fi
+
+  echo "SUCCESS"
+
+  if ! apply_solocraft_db; then
+    false
+    return
+  fi
+  true
+}
+
 function create_all_databases_and_user()
 {
   clear
@@ -1951,6 +2007,10 @@ function create_all_databases_and_user()
   fi
 
   if ! create_and_fill_playerbots_db; then
+    return
+  fi
+
+  if ! create_and_fill_solocraft_db; then
     return
   fi
 
@@ -2415,7 +2475,7 @@ function backup_restore()
     ((count++))
   done < <(printf '%s\n' backups/${EXPANSION_LC}-db_${1}_*.gz | sort -zVr)
   IFS="$OLDIFS"
-  echo "> 9) Go to previous menu"
+  echo "> 0) Go to previous menu"
 
   if [[ $count -lt 1 ]]; then
     echo "No backup files found"
@@ -2464,7 +2524,7 @@ function manage_realmlist_menu()
     echo "> 2) Add new realm"
     echo "> 3) Remove a realm"
     echo "> 4) Refresh realm list"
-    echo "> 9) Return to main menu"
+    echo "> 0) Return to main menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2490,7 +2550,7 @@ function backup_create_db_menu()
     echo "> 2) Create a new backup of '${CHAR_DB_NAME}' databases"
     echo "> 3) Create a new backup of '${REALM_DB_NAME}' databases"
     echo "> 4) Create a new backup of '${LOGS_DB_NAME}' databases"
-    echo "> 9) Go to previous menu"
+    echo "> 0) Go to previous menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2516,7 +2576,7 @@ function backup_restore_db_menu()
     echo "> 2) Restore previous backup of '${CHAR_DB_NAME}' databases"
     echo "> 3) Restore previous backup of '${REALM_DB_NAME}' databases"
     echo "> 4) Restore previous backup of '${LOGS_DB_NAME}' databases"
-    echo "> 9) Go to previous menu"
+    echo "> 0) Go to previous menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2542,7 +2602,7 @@ function manage_backup_menu()
     echo "> 2) Create backup of a specific databases"
     echo "> 3) Restore backup of all your databases"
     echo "> 4) Delete a backup file"
-    echo "> 9) Go to previous menu"
+    echo "> 0) Go to previous menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2573,8 +2633,9 @@ function advanced_db_install_menu()
     echo "> 5) Create and fill logs database"
     echo "> 6) Create 'core user' for db and set its default privileges"
     echo "> 7) Delete all databases and users"
-	echo "> 8) Create and fill playerbots db"
-    echo "> 9) Return to previous menu"
+	  echo "> 8) Create and fill playerbots db"
+    echo "> 9) Create and Fill SoloCraft db"
+    echo "> 0) Return to previous menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2587,6 +2648,7 @@ function advanced_db_install_menu()
       "6") create_db_user_and_set_privileges true; wait_key;;
       "7") delete_all_databases_and_user true; wait_key;;
       "8") create_and_fill_playerbots_db true; wait_key;;
+      "9") create_and_fill_solocraft_db true; wait_key;;
       *) break;;
     esac
   done
@@ -2613,7 +2675,7 @@ function full_db_install_menu()
     echo "> 2) Edit settings"
     echo "> 3) Install fresh ${EXPANSION}-DB only to '${WORLD_DB_NAME}'"
     echo "> 8) Advanced database management menu"
-    echo "> 9) Return to main menu"
+    echo "> 0) Return to main menu"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2682,9 +2744,9 @@ function check_settings_menu()
       echo "> 8) Try to autodetect cmangos core path"
     fi
     if [ ${#current_errors[@]} = 0 ] || [ "$STATUS_ROOT_SUCCESS" = true ]; then
-      echo "> 9) Go to main menu"
+      echo "> 0) Go to main menu"
     else
-      echo "> 9) Exit"
+      echo "> 0) Exit"
     fi
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
@@ -2740,7 +2802,7 @@ function main_menu()
     echo "> 5) Advanced DB management (root required)"
     echo "> 6) Manage realm list"
     echo "> 7) Manage your DB backup"
-    echo "> 9) Quit"
+    echo "> 0) Quit"
     echo
     read -n 1 -e -p "Please enter your choice.....: " CHOICE
 
@@ -2814,6 +2876,11 @@ function auto_script_create_all()
   if ! create_and_fill_playerbots_db; then
     false
     return
+  fi
+
+  if ! create_and_fill_solocraft_db; then
+    false
+    return;
   fi
 
   if ! apply_core_update; then
